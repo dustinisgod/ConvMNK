@@ -104,6 +104,9 @@ local function setFeignDeath(value)
         gui.feignAggroPercent = value
 
         print("Feign Death percent set to:", gui.feignAggroPercent)
+    elseif value == 'off' then
+        gui.feignAggro = false
+        print("Feign Death disabled.")
     else
         print("Error: Invalid cooldown for Feign Death. Expected a number, received:", value)
         return
@@ -116,6 +119,9 @@ local function setMend(value)
         gui.useMendPercent = value
 
         print("Mend percent set to:", gui.useMendPercent)
+    elseif value == 'off' then
+        gui.useMend = false
+        print("Mend disabled.")
     else
         print("Error: Invalid cooldown for Feign Death. Expected a number, received:", value)
         return

@@ -7,8 +7,6 @@ local assist = {}
 
 local charLevel = mq.TLO.Me.Level()
 
-local feigndeath = "Feign Death"
-
 function assist.assistRoutine()
 
     if not gui.botOn or not gui.assistMelee then
@@ -70,7 +68,8 @@ function assist.assistRoutine()
         end
 
         if gui.feignAggro then
-            if mq.TLO.Target() and gui.feignAggro and charLevel >= 17 and mq.TLO.Me.PctAggro() >= 80 and mq.TLO.Target.Distance() <= gui.assistRange then
+            local feigndeath = "Feign Death"
+            if mq.TLO.Target() and gui.feignAggro and mq.TLO.Me.AbilityReady(feigndeath) and mq.TLO.Me.PctAggro() >= 80 and mq.TLO.Target.Distance() <= gui.assistRange and not mq.TLO.Navigation.Active() then
                 mq.cmdf('/doability %s', feigndeath)
                 while mq.TLO.Me.PctAggro() > 80 and mq.TLO.Target.AggroHolder() do
                     mq.delay(10)
