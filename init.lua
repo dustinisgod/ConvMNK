@@ -5,6 +5,12 @@ local gui = require('gui')
 local nav = require('nav')
 local pull = require('pull')
 
+local class = mq.TLO.Me.Class()
+if class ~= "Monk" then
+    print("This script is only for Monks.")
+    mq.exit()
+end
+
 utils.PluginCheck()
 
 mq.cmd('/assist off')
