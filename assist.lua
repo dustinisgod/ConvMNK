@@ -106,14 +106,15 @@ function assist.assistRoutine()
 
         if mq.TLO.Target() and mq.TLO.Stick() == "ON" then
             local stickDistance = gui.stickDistance
-            local lowerBound = stickDistance * 0.9
-            local upperBound = stickDistance * 1.1
+            local lowerBound = 5
             local targetDistance = mq.TLO.Target.Distance()
         
-            if targetDistance > upperBound then
+            if targetDistance > stickDistance then
+                print("Moving forward")
                 mq.cmdf("/stick moveback %s", stickDistance)
                 mq.delay(100)
             elseif targetDistance < lowerBound then
+                print("Moving back")
                 mq.cmdf("/stick moveback %s", stickDistance)
                 mq.delay(100)
             end
