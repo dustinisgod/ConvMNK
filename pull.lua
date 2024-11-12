@@ -90,7 +90,7 @@ local function updatePullQueue()
     table.sort(pullQueue, function(a, b) return a.Distance() < b.Distance() end)
 end
 
-local function isGroupOrRaidMember()
+local function isGroupOrRaidMember(memberName)
     local aggroHolderName = mq.TLO.Target.AggroHolder.Name()  -- Get the name of the aggro holder
 
     -- Check raid members if not already found in group
@@ -184,7 +184,6 @@ end
 
 
 local function pullTarget()
-
     if #pullQueue == 0 then
         return
     end
@@ -206,7 +205,7 @@ local function pullTarget()
         return
     end
 
-     if mq.TLO.Target() and mq.TLO.Target.PctAggro() > 0 or isGroupOrRaidMember() then
+    if mq.TLO.Target() and mq.TLO.Target.PctAggro() > 0 or isGroupOrRaidMember() then
         local targetID = target.ID()
         if type(targetID) == "number" then
             table.insert(aggroQueue, targetID)
@@ -220,84 +219,68 @@ local function pullTarget()
     mq.delay(50, function() return mq.TLO.Navigation.Active() end)
 
     while mq.TLO.Target() and mq.TLO.Navigation.Active() do
-        local distance = target.Distance()
-        local pullRange = 160
-
-        if gui.corpseDrag then
-            corpsedrag.dragCheck()
-            break
+        -- Check if pullOn was unchecked during navigation
+        if not gui.pullOn then
+            print("Pulling stopped: pullOn was unchecked.")
+            mq.cmd("/nav stop")  -- Stop navigation
+            return
         end
 
-        if mq.TLO.Target() and distance <= pullRange and distance > 40 and mq.TLO.Target.LineOfSight() then
-            mq.cmd("/nav stop")
-            mq.delay(200)
+        if gui.botOn and gui.pullOn then
+            local distance = target.Distance()
+            local pullRange = 160
+
+            if gui.corpseDrag then
+                corpsedrag.dragCheck()
+                break
+            end
+
+            if mq.TLO.Target() and distance <= pullRange and distance > 40 and mq.TLO.Target.LineOfSight() then
+                mq.cmd("/nav stop")
+                mq.delay(200)
+            end
+        else
+            return
         end
     end
 
     local attempts = 0
     while attempts < 3 do
-        
-        if not mq.TLO.Target() then
-            print("Error: No target selected. Exiting pull routine.")
-            return
-        end
-
-        if mq.TLO.Target() and not mq.TLO.Navigation.Active() and mq.TLO.Target.LineOfSight() and mq.TLO.Target.PctAggro() <= 0 then
-
-            if not pullability then
-                print("Error: pullability is nil. Check if the ability ID is correctly set.")
+        if gui.botOn and gui.pullOn then
+            if not mq.TLO.Target() then
+                print("Error: No target selected. Exiting pull routine.")
                 return
             end
-            mq.cmdf("/alt act %s", pullability)
 
-            local timeout = os.time() + 2
-            while mq.TLO.Target() and mq.TLO.Target.PctAggro() <= 0 do
-                mq.delay(1)
-                if os.time() > timeout then
-                    attempts = attempts + 1
-                    break
+            if mq.TLO.Target() and not mq.TLO.Navigation.Active() and mq.TLO.Target.LineOfSight() and mq.TLO.Target.PctAggro() <= 0 then
+                if not pullability then
+                    print("Error: pullability is nil. Check if the ability ID is correctly set.")
+                    return
                 end
-            end
-            if mq.TLO.Target() and mq.TLO.Target.PctAggro() > 0 then
-                local targetID = mq.TLO.Target.ID()
-                if type(targetID) == "number" then
-                    table.insert(aggroQueue, targetID)
+                mq.cmdf("/alt act %s", pullability)
+
+                local timeout = os.time() + 2
+                while mq.TLO.Target() and mq.TLO.Target.PctAggro() <= 0 do
+                    mq.delay(1)
+                    if os.time() > timeout then
+                        attempts = attempts + 1
+                        break
+                    end
                 end
+                if mq.TLO.Target() and mq.TLO.Target.PctAggro() > 0 then
+                    local targetID = mq.TLO.Target.ID()
+                    if type(targetID) == "number" then
+                        table.insert(aggroQueue, targetID)
+                    end
+                    returnToCampIfNeeded()
+                    return
+                end
+            else
                 returnToCampIfNeeded()
                 return
             end
+            mq.delay(200)
         else
-            returnToCampIfNeeded()
-            return
-        end
-        mq.delay(200)
-    end
-
-    if mq.TLO.Target() and mq.TLO.Target.Distance() > 15 then
-        mq.cmd("/nav target")
-        mq.delay(50)
-        
-        while mq.TLO.Target() and mq.TLO.Navigation.Active() and target.Distance() > 15 and mq.TLO.Target.PctAggro() < 1 do
-            mq.delay(10)
-        end
-
-    else
-        local timeout = os.time() + 2
-        mq.cmd("/attack on")
-        while mq.TLO.Target() and mq.TLO.Target.PctAggro() < 1 do
-            mq.delay(1)
-            if os.time() > timeout then
-                mq.cmd("/squelch /attack off")
-                return
-            end
-        end
-        if mq.TLO.Target() and mq.TLO.Target.PctAggro() > 0 then
-            mq.cmd("/squelch /attack off")
-            local targetID = mq.TLO.Target.ID()
-            if type(targetID) == "number" then
-                table.insert(aggroQueue, targetID)
-            end
-            returnToCampIfNeeded()
             return
         end
     end
@@ -388,11 +371,11 @@ local function pullRoutine()
             end
         end
 
-        if zone ~= nav.campLocation.zone or zone == "unknown" then
-                print("Current zone does not match camp zone. Aborting pull routine.")
-                return
+        if zone ~= nav.campLocation.zone or zone == "unknown" or zone == "nil" then
+            print("Current zone does not match camp zone. Aborting pull routine.")
+            return
         end
-        
+
         gui.campQueue = utils.referenceLocation(gui.campSize) or {}
         campQueueCount = #gui.campQueue  -- Update campQueueCount to track mob count
 
@@ -409,6 +392,13 @@ local function pullRoutine()
         end
 
         while pullCondition() do
+            -- Check if pullOn was unchecked during the routine
+            if not gui.pullOn then
+                print("Pulling stopped: pullOn was unchecked.")
+                mq.cmd("/nav stop")  -- Stop any active navigation
+                return
+            end
+
             local groupStatusOk = checkGroupMemberStatus()
             if not groupStatusOk then
                 break
@@ -426,6 +416,8 @@ local function pullRoutine()
                 break
             end
         end
+    else
+        return
     end
 end
 
