@@ -306,7 +306,7 @@ local function controlGUI()
             gui.campSize = ImGui.SliderInt("Camp Size", gui.campSize, 20, 100)
         -- Check if the tank range has changed
         if gui.campSize ~= previouscampSize then
-            mq.cmdf('/mapfilter spellradius %s', gui.campSize)
+            mq.cmdf('/squelch /mapfilter spellradius %s', gui.campSize)
             previouscampSize = gui.campSize
         end
             ImGui.Spacing()
@@ -314,7 +314,7 @@ local function controlGUI()
             gui.pullDistanceXY = ImGui.SliderInt("Pull Distance", gui.pullDistanceXY, 5, 4000)
         -- Check if the tank range has changed
         if gui.pullDistanceXY ~= previouspullDistanceXY then
-            mq.cmdf('/mapfilter castradius %s', gui.pullDistanceXY)
+            mq.cmdf('/squelch /mapfilter castradius %s', gui.pullDistanceXY)
             previouspullDistanceXY = gui.pullDistanceXY
         end
             ImGui.Spacing()

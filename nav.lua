@@ -11,7 +11,7 @@ function nav.setCamp()
         x = mq.TLO.Me.X() or 0,
         y = mq.TLO.Me.Y() or 0,
         z = mq.TLO.Me.Z() or 0,
-        zone = mq.TLO.Zone.ShortName() or "Unknown"
+        zone = mq.TLO.Zone.ShortName()
     }
     print(string.format("Camp location set at your current position in zone %s.", nav.campLocation.zone))
 end
@@ -27,7 +27,6 @@ function nav.checkCampDistance()
         if gui.returnToCamp and nav.campLocation then
             -- Check if the character is in the same zone as the camp location
             if mq.TLO.Zone.ShortName() ~= nav.campLocation.zone then
-                print("Current zone does not match camp zone. Aborting return to camp.")
                 return
             end
 
