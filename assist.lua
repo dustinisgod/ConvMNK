@@ -41,9 +41,13 @@ function assist.assistRoutine()
 
     if mq.TLO.Target() and mq.TLO.Target.PctHPs() <= gui.assistPercent and mq.TLO.Target.Distance() <= gui.assistRange and mq.TLO.Stick() == "OFF" and not mq.TLO.Target.Mezzed() then
         if gui.stickFront then
+            mq.cmd('/nav stop')
+            mq.delay(100)
             mq.cmdf("/stick front %d uw", gui.stickDistance)
             mq.delay(100)
         elseif gui.stickBehind then
+            mq.cmd('/nav stop')
+            mq.delay(100)
             mq.cmdf("/stick behind %d uw", gui.stickDistance)
             mq.delay(100)
         end
