@@ -74,16 +74,16 @@ function assist.assistRoutine()
                 while mq.TLO.Me.PctAggro() > 80 and mq.TLO.Target.AggroHolder() do
                     mq.delay(10)
                 end
-                mq.cmd("/stand")
+                mq.cmd("/squelch /stand")
                 mq.delay(100)
-                mq.cmd("/attack on")
+                mq.cmd("/squelch /attack on")
             end
         end
 
         if gui.useMend then
             local mend = "Mend"
             if mq.TLO.Me.PctHPs() < 50 and mq.TLO.Me.AbilityReady(mend) and charLevel >= 10 then
-                mq.cmdf('/doability %s', mend)
+                mq.cmdf('/squelch /doability %s', mend)
             end
         end
 
@@ -94,13 +94,13 @@ function assist.assistRoutine()
             local flyingKick = "Flying Kick"
 
             if mq.TLO.Me.AbilityReady(kick) and (charLevel >= 1 and charLevel < 30) then
-                mq.cmdf('/doability %s', kick)
+                mq.cmdf('/squelch /doability %s', kick)
             end
             if mq.TLO.Me.AbilityReady(tigerClaw) and charLevel >= 10 then
-                mq.cmdf('/doability %s', tigerClaw)
+                mq.cmdf('/squelch /doability %s', tigerClaw)
             end
             if mq.TLO.Me.AbilityReady(flyingKick) and charLevel >= 30 then
-                mq.cmdf('/doability %s', flyingKick)
+                mq.cmdf('/squelch /doability %s', flyingKick)
             end
         end
 
@@ -110,11 +110,9 @@ function assist.assistRoutine()
             local targetDistance = mq.TLO.Target.Distance()
         
             if targetDistance > stickDistance then
-                print("Moving forward")
                 mq.cmdf("/stick moveback %s", stickDistance)
                 mq.delay(100)
             elseif targetDistance < lowerBound then
-                print("Moving back")
                 mq.cmdf("/stick moveback %s", stickDistance)
                 mq.delay(100)
             end
