@@ -20,8 +20,6 @@ mq.imgui.init('controlGUI', gui.controlGUI)
 commands.init()
 
 local toggleboton = false
-local lastPullOnState = false
-
 local function returnChaseToggle()
     -- Check if bot is on and return-to-camp is enabled, and only set camp if toggleboton is false
     if gui.botOn and gui.returnToCamp and not toggleboton then
@@ -31,16 +29,6 @@ local function returnChaseToggle()
         -- Clear camp if bot is turned off after being on
         nav.clearCamp()
         toggleboton = false
-    end
-
-    -- Check if pullOn has changed state and return-to-camp is enabled, only set camp if needed
-    if gui.pullOn ~= lastPullOnState then
-        lastPullOnState = gui.pullOn
-        if gui.pullOn and gui.returnToCamp then
-            nav.setCamp()
-        elseif not gui.pullOn then
-            nav.clearCamp()
-        end
     end
 end
 

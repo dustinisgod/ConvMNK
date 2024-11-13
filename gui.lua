@@ -101,6 +101,27 @@ function ColoredText(text, color)
     ImGui.TextColored(color[1], color[2], color[3], color[4], text)
 end
 
+local previousPullOn = gui.pullOn
+local function checkPullOnToggle()
+    if gui.botOn and not previousPullOn and gui.pullOn then
+        local nav = require('nav')
+        gui.chaseOn = false
+        gui.returnToCamp = true
+        nav.setCamp()
+    end
+
+    previousPullOn = gui.pullOn
+end
+
+local previousbotOn = gui.botOn
+local function checkBotOnToggle()
+    if not gui.botOn and previousbotOn and gui.pullOn then
+        gui.pullOn = false
+    end
+
+    previousbotOn = gui.botOn
+end
+
 local function controlGUI()
     gui.isOpen, _ = ImGui.Begin("Convergence Monk", gui.isOpen, 2)
 
@@ -110,7 +131,16 @@ local function controlGUI()
 
     ImGui.SetWindowSize(440, 600)
 
+    -- Track the previous state of `gui.botOn` within the UI rendering function
+    local previousBotOnState = gui.botOn or false
+
+    -- Render the checkbox and detect if `gui.botOn` has changed
     gui.botOn = ImGui.Checkbox("Bot On", gui.botOn or false)
+
+    -- Only call `checkBotOnToggle()` if `gui.botOn` has changed
+    if gui.botOn ~= previousBotOnState then
+        checkBotOnToggle()
+    end
 
     ImGui.SameLine()
 
@@ -235,7 +265,17 @@ local function controlGUI()
     if ImGui.CollapsingHeader("Pull Settings") then
         ImGui.Spacing()
     
+        -- Track the previous state of `gui.pullOn` within the UI rendering function
+        local previousPullOnState = gui.pullOn or false
+
+        -- Render the checkbox and detect if `gui.pullOn` has changed
         gui.pullOn = ImGui.Checkbox("Pull", gui.pullOn or false)
+
+        -- Only call `checkPullOnToggle()` if `gui.pullOn` has changed
+        if gui.pullOn ~= previousPullOnState then
+            checkPullOnToggle()
+        end
+        
         ImGui.Spacing()
 
         if gui.pullOn and not gui.previousPullOn then
