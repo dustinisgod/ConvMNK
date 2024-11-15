@@ -43,10 +43,14 @@ function assist.assistRoutine()
         if gui.stickFront then
             mq.cmd('/nav stop')
             mq.delay(100)
+            mq.cmd("/stick moveback 0")
+            mq.delay(100)
             mq.cmdf("/stick front %d uw", gui.stickDistance)
             mq.delay(100)
         elseif gui.stickBehind then
             mq.cmd('/nav stop')
+            mq.delay(100)
+            mq.cmd("/stick moveback 0")
             mq.delay(100)
             mq.cmdf("/stick behind %d uw", gui.stickDistance)
             mq.delay(100)
@@ -88,6 +92,7 @@ function assist.assistRoutine()
             local mend = "Mend"
             if mq.TLO.Me.PctHPs() < 50 and mq.TLO.Me.AbilityReady(mend) and charLevel >= 10 then
                 mq.cmdf('/squelch /doability %s', mend)
+                mq.delay(100)
             end
         end
 
@@ -99,12 +104,15 @@ function assist.assistRoutine()
 
             if mq.TLO.Me.AbilityReady(kick) and (charLevel >= 1 and charLevel < 30) then
                 mq.cmdf('/squelch /doability %s', kick)
+                mq.delay(100)
             end
             if mq.TLO.Me.AbilityReady(tigerClaw) and charLevel >= 10 then
                 mq.cmdf('/squelch /doability %s', tigerClaw)
+                mq.delay(100)
             end
             if mq.TLO.Me.AbilityReady(flyingKick) and charLevel >= 30 then
                 mq.cmdf('/squelch /doability %s', flyingKick)
+                mq.delay(100)
             end
         end
 
@@ -116,6 +124,7 @@ function assist.assistRoutine()
             if targetDistance > stickDistance then
                 mq.cmdf("/stick moveback %s", stickDistance)
                 mq.delay(100)
+                
             elseif targetDistance < lowerBound then
                 mq.cmdf("/stick moveback %s", stickDistance)
                 mq.delay(100)
