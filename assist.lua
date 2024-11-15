@@ -102,15 +102,15 @@ function assist.assistRoutine()
             local tigerClaw = "Tiger Claw"
             local flyingKick = "Flying Kick"
 
-            if mq.TLO.Me.AbilityReady(kick) and (charLevel >= 1 and charLevel < 30) then
+            if mq.TLO.Target() and mq.TLO.Me.AbilityReady(kick) and (charLevel >= 1 and charLevel < 30) then
                 mq.cmdf('/squelch /doability %s', kick)
                 mq.delay(100)
             end
-            if mq.TLO.Me.AbilityReady(tigerClaw) and charLevel >= 10 then
+            if mq.TLO.Target() and mq.TLO.Me.AbilityReady(tigerClaw) and charLevel >= 10 then
                 mq.cmdf('/squelch /doability %s', tigerClaw)
                 mq.delay(100)
             end
-            if mq.TLO.Me.AbilityReady(flyingKick) and charLevel >= 30 then
+            if mq.TLO.Target() and mq.TLO.Me.AbilityReady(flyingKick) and charLevel >= 30 then
                 mq.cmdf('/squelch /doability %s', flyingKick)
                 mq.delay(100)
             end
