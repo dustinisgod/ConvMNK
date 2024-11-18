@@ -10,7 +10,7 @@ utils.IsUsingCast = false
 utils.IsUsingMelee = false
 
 utils.pullConfig = {}
-local pullConfigPath = mq.configDir .. '/' .. 'ConvMNK_pull_ignore_list.lua'
+local pullConfigPath = mq.configDir .. '/' .. 'Conv_pull_ignore_list.lua'
 
 local charLevel = mq.TLO.Me.Level()
 
