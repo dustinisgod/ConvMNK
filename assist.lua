@@ -116,18 +116,29 @@ function assist.assistRoutine()
             end
         end
 
+        local lastStickDistance = nil
+
         if mq.TLO.Target() and mq.TLO.Stick() == "ON" then
-            local stickDistance = gui.stickDistance
-            local lowerBound = 5
+            local stickDistance = gui.stickDistance -- current GUI stick distance
+            local lowerBound = stickDistance * 0.9
+            local upperBound = stickDistance * 1.1
             local targetDistance = mq.TLO.Target.Distance()
-        
-            if targetDistance > stickDistance then
-                mq.cmdf("/stick moveback %s", stickDistance)
-                mq.delay(100)
-                
-            elseif targetDistance < lowerBound then
-                mq.cmdf("/stick moveback %s", stickDistance)
-                mq.delay(100)
+            
+            -- Check if stickDistance has changed
+            if lastStickDistance ~= stickDistance then
+                lastStickDistance = stickDistance
+                mq.cmdf("/squelch /stick moveback %s", stickDistance)
+            end
+    
+            -- Check if the target distance is out of bounds and adjust as necessary
+            if mq.TLO.Target.ID() then
+                if targetDistance > upperBound then
+                    mq.cmdf("/squelch /stick moveback %s", stickDistance)
+                    mq.delay(100)
+                elseif targetDistance < lowerBound then
+                    mq.cmdf("/squelch /stick moveback %s", stickDistance)
+                    mq.delay(100)
+                end
             end
         end
     
