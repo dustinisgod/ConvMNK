@@ -33,7 +33,7 @@ local function setDefaultConfig()
     gui.pullDistanceZ = 50
     gui.pullLevelMin = 1
     gui.pullLevelMax = 70
-    gui.pullPause = true
+    gui.pullPause = false
     gui.pullPauseTimer = 30
     gui.pullPauseDuration = 4
     gui.keepMobsInCamp = false
@@ -51,6 +51,10 @@ local function setDefaultConfig()
     gui.feignAggroPercent = 80
     gui.useMend = true
     gui.useMendPercent = 50
+    gui.pullNorth = false
+    gui.pullEast = false
+    gui.pullSouth = false
+    gui.pullWest = false
 end
 
 function gui.getPullDistanceXY()
@@ -264,7 +268,7 @@ local function controlGUI()
     ImGui.Spacing()
     if ImGui.CollapsingHeader("Pull Settings") then
         ImGui.Spacing()
-    
+
         -- Track the previous state of `gui.pullOn` within the UI rendering function
         local previousPullOnState = gui.pullOn or false
 
@@ -275,18 +279,9 @@ local function controlGUI()
         if gui.pullOn ~= previousPullOnState then
             checkPullOnToggle()
         end
-        
+
         ImGui.Spacing()
 
-        if gui.pullOn and not gui.previousPullOn then
-            local nav = require('nav')
-            gui.chaseOn = false
-            gui.returnToCamp = true
-            gui.campLocation = nav.setCamp()
-        end
-    
-        gui.previousPullOn = gui.pullOn
-    
         if gui.pullOn then
             gui.chase = false
             gui.returnToCamp = true
@@ -342,6 +337,16 @@ local function controlGUI()
             end
 
             ImGui.Spacing()
+            
+            gui.pullNorth = ImGui.Checkbox("Pull North", gui.pullNorth)
+            ImGui.SameLine()
+            gui.pullEast = ImGui.Checkbox("Pull East", gui.pullEast)
+            ImGui.SameLine()
+            gui.pullSouth = ImGui.Checkbox("Pull South", gui.pullSouth)
+            ImGui.SameLine()
+            gui.pullWest = ImGui.Checkbox("Pull West", gui.pullWest)
+
+            ImGui.Spacing()
             ImGui.SetNextItemWidth(100)
             gui.campSize = ImGui.SliderInt("Camp Size", gui.campSize, 20, 100)
         -- Check if the tank range has changed
@@ -377,6 +382,16 @@ local function controlGUI()
             ImGui.Separator()
             ImGui.Spacing()
 
+            gui.keepMobsInCamp = ImGui.Checkbox("Keep Mobs In Camp", gui.keepMobsInCamp or false)
+                if gui.keepMobsInCamp then
+                    ImGui.SetNextItemWidth(100)
+                    gui.keepMobsInCampAmount = ImGui.SliderInt("Camp Mobs", gui.keepMobsInCampAmount, 1, 40)
+                end
+
+            ImGui.Spacing()
+            ImGui.Separator()
+            ImGui.Spacing()
+
             gui.pullPause = ImGui.Checkbox("Pull Pause", gui.pullPause or false)
             if gui.pullPause then
                 ImGui.SetNextItemWidth(100)
@@ -384,17 +399,6 @@ local function controlGUI()
                 ImGui.SetNextItemWidth(100)
                 gui.pullPauseDuration = ImGui.SliderInt("Pause Length", gui.pullPauseDuration, 1, 15)
             end
-
-
-            ImGui.Spacing()
-            ImGui.Separator()
-            ImGui.Spacing()
-
-            gui.keepMobsInCamp = ImGui.Checkbox("Keep Mobs In Camp", gui.keepMobsInCamp or false)
-                if gui.keepMobsInCamp then
-                    ImGui.SetNextItemWidth(100)
-                    gui.keepMobsInCampAmount = ImGui.SliderInt("Camp Mobs", gui.keepMobsInCampAmount, 1, 40)
-                end
 
             ImGui.Spacing()
             ImGui.Separator()
@@ -427,7 +431,7 @@ local function controlGUI()
             end
         end
     end
-    
+
     ImGui.Spacing()
 
     if ImGui.CollapsingHeader("Misc Settings") then

@@ -2,7 +2,14 @@ local mq = require('mq')
 local gui = require('gui')
 local utils = require('utils')
 local nav = require('nav')
-local corpsedrag = require('corpsedrag')
+
+local DEBUG_MODE = false
+-- Debug print helper function
+local function debugPrint(...)
+    if DEBUG_MODE then
+        print(...)
+    end
+end
 
 local pullQueue = {}
 local campQueue = {}
@@ -10,8 +17,6 @@ local aggroQueue = {}  -- New queue to track mobs on their way to camp
 local campQueueCount = 0  -- Variable to track the number of mobs in campQueue
 
 local pullability = "376"
-
-local zone = mq.TLO.Zone.ShortName() or "Unknown"
 
 local messagePrintedFlags = {
     CLR = false,
@@ -21,56 +26,135 @@ local messagePrintedFlags = {
 }
 local pullPauseTimer = os.time()  -- Initialize with the current time
 
-local function getCleanName(name)
-    if not name then
-        return ""
+local function atan2(y, x)
+    if x > 0 then return math.atan(y / x) end
+    if x < 0 and y >= 0 then return math.atan(y / x) + math.pi end
+    if x < 0 and y < 0 then return math.atan(y / x) - math.pi end
+    if x == 0 and y > 0 then return math.pi / 2 end
+    if x == 0 and y < 0 then return -math.pi / 2 end
+    return 0
+end
+
+local function calculateHeadingTo(targetY, targetX)
+    if not targetY or not targetX then
+        print("calculateHeadingTo: Invalid target coordinates", targetY, targetX)
+        return nil
     end
-    return name:gsub("_%d+$", ""):gsub("_", " ")
+
+    local playerY = mq.TLO.Me.Y()
+    local playerX = mq.TLO.Me.X()
+
+    if not playerY or not playerX then
+        print("calculateHeadingTo: Invalid player coordinates")
+        return nil
+    end
+
+    local deltaY = targetY - playerY
+    local deltaX = targetX - playerX
+    local heading = math.deg(atan2(deltaX, deltaY))
+
+    if heading < 0 then heading = heading + 360 end
+    return heading
+end
+
+-- Define a predicate function that checks if the spawn is an NPC
+local function isNPC(spawn)
+    return spawn.Type() == 'NPC' and spawn.Distance() <= gui.pullDistanceXY
 end
 
 local function updatePullQueue()
-    -- Initialize pullQueue and reference campQueue location
+    debugPrint("Updating pullQueue...")
     pullQueue = {}
     campQueue = utils.referenceLocation(gui.campSize) or {}
 
-    -- Set pulling parameters
+    -- Predefined heading ranges
+    local headingRanges = {}
+    if gui.pullNorth then table.insert(headingRanges, {min = 315, max = 45}) end
+    if gui.pullWest then table.insert(headingRanges, {min = 45, max = 135}) end
+    if gui.pullSouth then table.insert(headingRanges, {min = 135, max = 225}) end
+    if gui.pullEast then table.insert(headingRanges, {min = 225, max = 315}) end
+
+    if #headingRanges == 0 then
+        table.insert(headingRanges, {min = 0, max = 360}) -- Default to all headings
+    end
+
+    local function isHeadingValid(heading)
+        for _, range in ipairs(headingRanges) do
+            if range.min <= range.max then
+                if heading >= range.min and heading <= range.max then
+                    return true
+                end
+            else -- Handle wrap-around cases
+                if heading >= range.min or heading <= range.max then
+                    return true
+                end
+            end
+        end
+        return false
+    end
+
+    -- Pull configuration parameters
     local pullDistanceXY = gui.pullDistanceXY
     local pullDistanceZ = gui.pullDistanceZ
     local pullLevelMin = gui.pullLevelMin
     local pullLevelMax = gui.pullLevelMax
 
-    -- Retrieve all spawns and initialize best target variables
-    local allSpawns = mq.getAllSpawns()
+    -- Retrieve all spawns
+    local allSpawns = mq.getFilteredSpawns(isNPC)
     local shortestPathLength = math.huge
     local bestTarget = nil
 
-    -- Iterate over all spawns to find the best pull target
     for _, spawn in ipairs(allSpawns) do
-        local distanceXY = spawn.Distance()
-        local distanceZ = spawn.DistanceZ()
-        local level = spawn.Level()
-        local cleanName = getCleanName(spawn.Name())
+        local targetY = spawn.Y() or mq.TLO.Spawn("id " .. spawn.ID()).Y()
+        local targetX = spawn.X() or mq.TLO.Spawn("id " .. spawn.ID()).X()
 
-        -- Check if the spawn is already in campQueue
-        local inPullQueue = false
-        for _, pullMob in ipairs(gui.campQueue) do
-            if pullMob.ID() == spawn.ID() then
-                inPullQueue = true
+        -- Skip spawns with invalid coordinates
+        if not targetY or not targetX then
+            debugPrint("Skipping spawn due to invalid coordinates:", spawn.Name() or "Unnamed")
+            goto continue
+        end
+
+        -- Calculate heading to the spawn
+        local headingToSpawn = calculateHeadingTo(targetY, targetX)
+        if not headingToSpawn then
+            debugPrint("Skipping spawn due to heading calculation failure:", spawn.Name() or "Unnamed")
+            goto continue
+        end
+
+        -- Validate against campQueue
+        local alreadyInQueue = false
+        for _, campMob in ipairs(campQueue) do
+            if campMob.ID() == spawn.ID() then
+                alreadyInQueue = true
                 break
             end
         end
-
-        if inPullQueue then
+        if alreadyInQueue then
+            debugPrint("Skipping spawn already in campQueue:", spawn.Name())
             goto continue
         end
-
+        local mobID = spawn.ID()
+        local mobName = mq.TLO.Spawn(mobID).CleanName()
         -- Check if spawn's name is in the pull ignore list
-        if utils.pullConfig[cleanName] then
+        if utils.pullConfig[mq.TLO.Zone.ShortName()] and utils.pullConfig[mq.TLO.Zone.ShortName()][mobName] then
+            debugPrint("Skipping spawn due to pullConfig exclusion:", mobName)
             goto continue
         end
 
-        -- Evaluate spawn against pull conditions
-        if spawn.Type() == "NPC" and level >= pullLevelMin and level <= pullLevelMax and distanceXY <= pullDistanceXY and distanceZ <= pullDistanceZ then
+        -- Validate heading range
+        if not isHeadingValid(headingToSpawn) then
+            debugPrint("Skipping spawn outside heading range:", spawn.Name())
+            goto continue
+        end
+
+        -- Validate against pull conditions
+        local distanceXY = spawn.Distance()
+        local distanceZ = spawn.DistanceZ()
+        local level = spawn.Level()
+
+        if spawn.Type() == "NPC" and
+           level >= pullLevelMin and level <= pullLevelMax and
+           distanceXY <= pullDistanceXY and distanceZ <= pullDistanceZ then
             local pathLength = mq.TLO.Navigation.PathLength("id " .. spawn.ID())()
             if pathLength and pathLength > -1 and pathLength < shortestPathLength then
                 bestTarget = spawn
@@ -81,13 +165,17 @@ local function updatePullQueue()
         ::continue::
     end
 
-    -- Add the best target to the pullQueue if one is found
+    -- Add the best target to the pullQueue if it meets conditions
     if bestTarget then
         table.insert(pullQueue, bestTarget)
+        debugPrint("Best target added to pullQueue:", bestTarget.Name(), "Path Length:", shortestPathLength)
+    else
+        debugPrint("No suitable target found for pulling.")
     end
 
     -- Sort pullQueue by distance
     table.sort(pullQueue, function(a, b) return a.Distance() < b.Distance() end)
+    debugPrint("Updated pullQueue:", #pullQueue)
 end
 
 local function isGroupOrRaidMember(memberName)
@@ -129,11 +217,11 @@ local function returnToCampIfNeeded()
 
         -- Navigate back to camp if beyond threshold
         if distanceToCamp > 50 then
-            mq.cmdf("/nav loc %f %f %f", campY, campX, campZ)
+            mq.cmdf("/squelch /nav loc %f %f %f", campY, campX, campZ)
             while mq.TLO.Navigation.Active() do
                 mq.delay(50)
             end
-            mq.cmd("/face")  -- Face camp direction after reaching camp
+            mq.cmd("/face fast")  -- Face camp direction after reaching camp
         end
     end
 end
@@ -152,7 +240,7 @@ local function updateAggroQueue()
             table.remove(aggroQueue, i)  -- Remove dead or nonexistent mob
         else
             -- Target the mob to check aggro
-            mq.cmdf("/target id %d", mobID)
+            mq.cmdf("/squelch /target id %d", mobID)
             mq.delay(10)  -- Small delay to allow targeting
 
             -- Verify mob is still the target and has aggro
@@ -184,15 +272,16 @@ end
 
 
 local function pullTarget()
+    debugPrint("Pulling target...")
     if #pullQueue == 0 then
         return
     end
 
     local target = pullQueue[1]
-    mq.cmd("/attack off")
+    mq.cmd("/squelch /attack off")
     mq.delay(100)
 
-    mq.cmdf("/target id %d", target.ID())
+    mq.cmdf("/squelch /target id %d", target.ID())
     mq.delay(200, function() return mq.TLO.Target.ID() == target.ID() end)
 
     if mq.TLO.Target() and mq.TLO.Target.ID() ~= target.ID() then
@@ -215,75 +304,55 @@ local function pullTarget()
         return
     end
 
-    mq.cmdf("/nav id %d", target.ID())
+    mq.cmdf("/squelch /nav id %d", target.ID())
+    debugPrint("Navigating to target:", target.Name())
     mq.delay(50, function() return mq.TLO.Navigation.Active() end)
 
-    while mq.TLO.Target() and mq.TLO.Navigation.Active() do
-        -- Check if pullOn was unchecked during navigation
-        if not gui.pullOn then
-            print("Pulling stopped: pullOn was unchecked.")
-            mq.cmd("/nav stop")  -- Stop navigation
-            return
-        end
-
-        if gui.botOn and gui.pullOn then
-            local distance = target.Distance()
-            local pullRange = 160
-
-            if gui.corpseDrag then
-                corpsedrag.dragCheck()
-                break
-            end
-
-            if mq.TLO.Target() and distance <= pullRange and distance > 40 and mq.TLO.Target.LineOfSight() then
-                mq.cmd("/nav stop")
-                mq.delay(200)
-            end
-        else
-            return
-        end
-    end
-
-    local attempts = 0
-    while attempts < 3 do
+    while mq.TLO.Target() and mq.TLO.Target.PctAggro() <= 0 do
         if gui.botOn and gui.pullOn then
             if not mq.TLO.Target() then
                 print("Error: No target selected. Exiting pull routine.")
                 return
             end
 
-            if mq.TLO.Target() and not mq.TLO.Navigation.Active() and mq.TLO.Target.LineOfSight() and mq.TLO.Target.PctAggro() <= 0 then
+            if mq.TLO.Target() and mq.TLO.Target.LineOfSight() and mq.TLO.Target.PctAggro() <= 0 and mq.TLO.Target.Distance() < 160 then
+                debugPrint("Target is in line of sight and within range.", mq.TLO.Target.LineOfSight())
+
                 if not pullability then
                     print("Error: pullability is nil. Check if the ability ID is correctly set.")
                     return
                 end
-                mq.cmdf("/alt act %s", pullability)
-
-                local timeout = os.time() + 2
-                while mq.TLO.Target() and mq.TLO.Target.PctAggro() <= 0 do
-                    mq.delay(1)
-                    if os.time() > timeout then
-                        attempts = attempts + 1
-                        break
-                    end
+                debugPrint("Pulling target:", target.Name())
+                if mq.TLO.Me.AltAbilityReady(pullability) then
+                    mq.cmdf("/squelch /alt act %s", pullability)
                 end
-                if mq.TLO.Target() and mq.TLO.Target.PctAggro() > 0 then
-                    local targetID = mq.TLO.Target.ID()
-                    if type(targetID) == "number" then
-                        table.insert(aggroQueue, targetID)
-                    end
-                    returnToCampIfNeeded()
-                    return
-                end
-            else
-                returnToCampIfNeeded()
-                return
             end
-            mq.delay(200)
+
+            if mq.TLO.Target() and not mq.TLO.Navigation.Active() and not mq.TLO.Target.LineOfSight() then
+                debugPrint("Navigating to target:", target.Name())
+                mq.cmdf("/squelch /nav id %d", target.ID())
+            end
         else
+            debugPrint("Bot is off. Exiting pull routine.")
             return
         end
+        mq.delay(200)
     end
+
+    if mq.TLO.Target() and mq.TLO.Target.PctAggro() > 0 then
+        debugPrint("Target has aggro. Stopping pull routine.")
+        mq.cmd("/squelch /nav stop")
+        mq.delay(100)
+        local targetID = mq.TLO.Target.ID()
+        if type(targetID) == "number" then
+            debugPrint("Adding target to aggroQueue:", targetID)
+            table.insert(aggroQueue, targetID)
+        end
+        debugPrint("Removing target from pullQueue:", target.Name())
+        returnToCampIfNeeded()
+        return
+    end
+
 end
 
 local function isGroupMemberAliveAndSufficientMana(classShortName, manaThreshold)
@@ -341,83 +410,139 @@ end
 local shownMessage = false  -- Flag to track if the message has been shown
 
 -- Main check function to run periodically
-local function checkHealthAndBuff()
-    local hasRezSickness = mq.TLO.Me.Buff(13087)()
+local function checkHealthAndBuffAndAssist()
+    local hasRezSickness = mq.TLO.Me.Buff("Revival Sickness")()
     local healthPct = mq.TLO.Me.PctHPs()
     local rooted = mq.TLO.Me.Rooted()
-
-    if not shownMessage and (hasRezSickness or healthPct < 70 or rooted) then
-        print("Cannot pull: Either rez sickness is present or health is below 70%.")
-        shownMessage = true  -- Set the flag to avoid repeating the message
-    elseif shownMessage and healthPct >= 70 then
-        -- Reset the flag when health is back above 70%
+    local deadMA = mq.TLO.Spawn(gui.mainAssist).Dead()
+    local maID = tostring(mq.TLO.Spawn(gui.mainAssist).ID())
+    
+    if healthPct < 70  then
+        if not shownMessage then
+            print("Cannot pull: Health is below 70%.")
+            shownMessage = true
+        end
+        return false
+    elseif hasRezSickness == "Revival Sickness" then
+        if not shownMessage then
+            print("Cannot pull: Revival Sickness is active.")
+            shownMessage = true
+        end
+        return false
+    elseif rooted then
+        if not shownMessage then
+            print("Cannot pull: Rooted.")
+            shownMessage = true
+        end
+        return false
+    elseif deadMA then
+        if not shownMessage then
+            print("Cannot pull: Main assist is dead.")
+            shownMessage = true
+        end
+        return false
+    elseif maID == "0" then
+        if not shownMessage then
+            print("Cannot pull: Main assist does not exist.")
+            shownMessage = true
+        end
+        return false
+    else
         shownMessage = false
+        return true
     end
 end
 
 local function pullRoutine()
-    checkHealthAndBuff()
+    debugPrint("Running pull routine...")
+   
+    if not gui.botOn and gui.pullOn then
+        debugPrint("Bot is off. Exiting pull routine.")
+        return
+    end
 
-    if gui.botOn and gui.pullOn then
-        if gui.pullPause and os.difftime(os.time(), pullPauseTimer) >= (gui.pullPauseTimer * 60) then
-            if utils.isInCamp() then
-                print("Pull routine paused for " .. gui.pullPauseDuration .. " minutes.")
-                mq.delay(gui.pullPauseDuration * 60 * 1000)  -- Pause timer
+    if not checkHealthAndBuffAndAssist() then
+        debugPrint("Health, buffs, or main assist status is not OK. Exiting pull routine.")
+        return
+    end
 
-                aggroQueue = {}
-                updateAggroQueue()
+    if gui.pullPause and os.difftime(os.time(), pullPauseTimer) >= (gui.pullPauseTimer * 60) then
+        if utils.isInCamp() then
+            print("Pull routine paused for " .. gui.pullPauseDuration .. " minutes.")
+            mq.delay(gui.pullPauseDuration * 60 * 1000)  -- Pause timer
 
-                pullPauseTimer = os.time()  -- Reset the timer
-            end
+            aggroQueue = {}
+            updateAggroQueue()
+            debugPrint("AggroQueue count:", #aggroQueue)
+
+            pullPauseTimer = os.time()  -- Reset the timer
         end
+    end
 
-        if zone ~= nav.campLocation.zone or zone == "unknown" or zone == "nil" then
-            print("Current zone does not match camp zone. Aborting pull routine.")
+    -- Check if nav.campLocation exists and has a valid zone
+    if not nav.campLocation or not nav.campLocation.zone or nav.campLocation.zone == "nil" then
+        print("Camp location is not set. Aborting pull routine.")
+        return
+    end
+
+    -- Check if the current zone does not match camp zone
+    local zone = mq.TLO.Zone.ShortName()
+    if zone ~= nav.campLocation.zone then
+        print("Current zone does not match camp zone. Aborting pull routine.")
+        return
+    end
+
+    gui.campQueue = utils.referenceLocation(gui.campSize) or {}
+    campQueueCount = #gui.campQueue  -- Update campQueueCount to track mob count
+    debugPrint("CampQueue count:", campQueueCount)
+
+    aggroQueue = aggroQueue or {}
+    updateAggroQueue()
+    debugPrint("AggroQueue count:", #aggroQueue)
+
+    local targetCampAmount = gui.keepMobsInCampAmount or 1
+
+    local pullCondition
+    if gui.keepMobsInCamp then
+        debugPrint("Pulling until campQueue reaches target amount:", targetCampAmount)
+        pullCondition = function() return campQueueCount < targetCampAmount and #aggroQueue == 0 end
+    else
+        debugPrint("Pulling until campQueue is empty and aggroQueue is empty.")
+        pullCondition = function() return campQueueCount == 0 and #aggroQueue == 0 end
+    end
+
+    while pullCondition() do
+        debugPrint("Pulling target...")
+        -- Check if pullOn was unchecked during the routine
+        if not gui.pullOn then
+            debugPrint("Pull routine stopped.")
+            return
+        elseif mq.TLO.Navigation.Active() then
+            debugPrint("Navigation is active. Stopping pull routine.")
+            mq.cmd("/squelch /nav stop")  -- Stop any active navigation
             return
         end
 
-        gui.campQueue = utils.referenceLocation(gui.campSize) or {}
-        campQueueCount = #gui.campQueue  -- Update campQueueCount to track mob count
+        local groupStatusOk = checkGroupMemberStatus()
+        if not groupStatusOk then
+            debugPrint("Group status is not OK. Pausing pull routine.")
+            break
+        end
 
-        aggroQueue = aggroQueue or {}
-        updateAggroQueue()
+        updatePullQueue()
+        debugPrint("PullQueue count:", #pullQueue)  
+        if #pullQueue > 0 then
+            pullTarget()
 
-        local targetCampAmount = gui.keepMobsInCampAmount or 1
+            gui.campQueue = utils.referenceLocation(gui.campSize) or {}
+            campQueueCount = #gui.campQueue  -- Refresh campQueueCount after updating campQueue
 
-        local pullCondition
-        if gui.keepMobsInCamp then
-            pullCondition = function() return campQueueCount < targetCampAmount and #aggroQueue == 0 end
+            updateAggroQueue()
+            debugPrint("AggroQueue count:", #aggroQueue)
         else
-            pullCondition = function() return campQueueCount == 0 and #aggroQueue == 0 end
+            debugPrint("No targets found in pullQueue.")
+            break
         end
-
-        while pullCondition() do
-            -- Check if pullOn was unchecked during the routine
-            if not gui.pullOn then
-                print("Pulling stopped: pullOn was unchecked.")
-                mq.cmd("/nav stop")  -- Stop any active navigation
-                return
-            end
-
-            local groupStatusOk = checkGroupMemberStatus()
-            if not groupStatusOk then
-                break
-            end
-
-            updatePullQueue()
-            if #pullQueue > 0 then
-                pullTarget()
-
-                gui.campQueue = utils.referenceLocation(gui.campSize) or {}
-                campQueueCount = #gui.campQueue  -- Refresh campQueueCount after updating campQueue
-
-                updateAggroQueue()
-            else
-                break
-            end
-        end
-    else
-        return
     end
 end
 

@@ -2,6 +2,14 @@ local mq = require('mq')
 local gui = require('gui')
 local nav = require('nav')
 
+local DEBUG_MODE = false
+-- Debug print helper function
+local function debugPrint(...)
+    if DEBUG_MODE then
+        print(...)
+    end
+end
+
 local utils = {}
 
 utils.IsUsingDanNet = true
@@ -91,27 +99,39 @@ end
 
 function utils.assistMonitor()
     local assist = require('assist')
-    -- If gui.pullOn is not enabled, call assist immediately
-    if not gui.pullOn then
-        assist.assistRoutine()
-        return
-    end
-
-    -- Check campQueue requirements if pulling is enabled
-    local campQueueSize = #gui.campQueue
-
-    -- If `gui.keepMobsInCamp` is checked, ensure campQueue has at least `keepMobsInCampAmount` mobs
-    if gui.keepMobsInCamp then
-        if campQueueSize >= gui.keepMobsInCampAmount then
-            assist.assistRoutine()
+    debugPrint("assistMonitor")
+        if gui.botOn then
+            if not gui.assistMelee then
+                debugPrint("not gui.assistMelee")
+                return
+            end
+    
+            if gui.pullOn then
+                debugPrint("gui.pullOn")
+                gui.campQueue = gui.campQueue or {}
+                local campQueueSize = #gui.campQueue
+    
+                if gui.keepMobsInCamp then
+                    debugPrint("gui.keepMobsInCamp")
+                    if campQueueSize >= gui.keepMobsInCampAmount then
+                        debugPrint("campQueueSize >= gui.keepMobsInCampAmount")
+                        assist.assistRoutine()
+                    end
+                else
+                    if campQueueSize >= 1 then
+                        debugPrint("campQueueSize >= 1")
+                        assist.assistRoutine()
+                    end
+                end
+            else
+                debugPrint("not gui.pullOn")
+                assist.assistRoutine()
+            end
+        else
+            debugPrint("not gui.botOn")
+            return
         end
-    else
-        -- Otherwise, ensure campQueue has at least 1 mob if `gui.pullOn` is enabled
-        if campQueueSize >= 1 then
-            assist.assistRoutine()
-        end
     end
-end
 
 function utils.setMainAssist(charName)
     if charName and charName ~= "" then
@@ -184,7 +204,7 @@ function utils.isInCamp(range)
 end
 
 function utils.referenceLocation(range)
-    range = range or 100  -- Set a default range if none is provided
+    range = range or 50  -- Set a default range if none is provided
 
     -- Determine reference location based on returnToCamp or chaseOn settings
     local referenceLocation
@@ -217,12 +237,23 @@ function utils.referenceLocation(range)
             return false  -- Skip this spawn if any coordinate is nil
         end
 
+        local mobID = spawn.ID()
+        local mobName = mq.TLO.Spawn(mobID).CleanName()
+        local currentZone = mq.TLO.Zone.ShortName()
+
+        -- Check if the mob is in the globalIgnoreList or zone-specific ignore list
+        if utils.pullConfig.globalIgnoreList[mobName] or 
+           (utils.pullConfig[currentZone] and utils.pullConfig[currentZone][mobName]) then
+            debugPrint("Skipping spawn due to pullConfig exclusion:", mobName)
+            return false
+        end
+
         local distanceToReference = math.sqrt((referenceLocation.x - mobX)^2 +
                                               (referenceLocation.y - mobY)^2 +
                                               (referenceLocation.z - mobZ)^2)
-        return spawn.Type() == 'NPC' and distanceToReference <= range
+        -- Add Line of Sight (LOS) check
+        return spawn.Type() == 'NPC' and distanceToReference <= range and spawn.LineOfSight()
     end)
-    
 
     return mobsInRange  -- Return the list of mobs in range
 end
