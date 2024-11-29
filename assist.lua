@@ -96,6 +96,13 @@ function assist.assistRoutine()
             end
         end
 
+        local epicbuff = "Celestial Tranquility"
+        local epic = "Celestial Fists"
+        if gui.useEpic and not mq.TLO.Me.Buff(epicbuff)() then
+            mq.cmdf('/squelch /useitem %s', epic)
+            mq.delay(100)
+        end
+
         if mq.TLO.Target() and mq.TLO.Target.Distance() <= gui.assistRange then
 
             local kick = "Kick"

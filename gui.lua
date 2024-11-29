@@ -51,6 +51,7 @@ local function setDefaultConfig()
     gui.feignAggroPercent = 80
     gui.useMend = true
     gui.useMendPercent = 50
+    gui.useEpic = false
     gui.pullNorth = false
     gui.pullEast = false
     gui.pullSouth = false
@@ -450,6 +451,10 @@ local function controlGUI()
             ImGui.SetNextItemWidth(100)
             gui.useMendPercent = ImGui.SliderInt("Mend Percent", gui.useMendPercent, 1, 100)
         end
+        ImGui.Spacing()
+
+        gui.useEpic = ImGui.Checkbox("Use Epic", gui.useEpic or false)
+
         ImGui.Spacing()
 end
 
