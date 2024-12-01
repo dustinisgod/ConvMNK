@@ -56,6 +56,7 @@ local function setDefaultConfig()
     gui.pullEast = false
     gui.pullSouth = false
     gui.pullWest = false
+    gui.corpsedrag = false
 end
 
 function gui.getPullDistanceXY()
@@ -456,6 +457,8 @@ local function controlGUI()
         gui.useEpic = ImGui.Checkbox("Use Epic", gui.useEpic or false)
 
         ImGui.Spacing()
+
+        gui.corpsedrag = ImGui.Checkbox("Corpsedrag", gui.corpsedrag or false)
 end
 
     ImGui.End()

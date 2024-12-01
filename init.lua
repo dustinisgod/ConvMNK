@@ -43,6 +43,10 @@ while gui.controlGUI do
 
         utils.monitorNav()
 
+        if gui.corpsedrag then
+            utils.monitorCorpseDrag()
+        end
+
         if gui.pullOn then
             pull.pullRoutine()
         end
