@@ -22,9 +22,9 @@ local function setDefaultConfig()
     gui.stickBehind = true
     gui.stickDistance = 15
     gui.switchWithMA = true
-    gui.returnToCamp = false
+    gui.returntocamp = false
     gui.campDistance = 10
-    gui.chaseOn = false
+    gui.chaseon = false
     gui.chaseTarget = ""
     gui.chaseDistance = 20
     gui.pullOn = false
@@ -111,8 +111,8 @@ local previousPullOn = gui.pullOn
 local function checkPullOnToggle()
     if gui.botOn and not previousPullOn and gui.pullOn then
         local nav = require('nav')
-        gui.chaseOn = false
-        gui.returnToCamp = true
+        gui.chaseon = false
+        gui.returntocamp = true
         nav.setCamp()
     end
 
@@ -218,14 +218,14 @@ local function controlGUI()
     if ImGui.CollapsingHeader("Nav Settings") then
     ImGui.Spacing()
     
-        local previousReturnToCamp = gui.returnToCamp or false
-        local previousChaseOn = gui.chaseOn or false
+        local previousReturnToCamp = gui.returntocamp or false
+        local previousChaseOn = gui.chaseon or false
 
-        local currentReturnToCamp = ImGui.Checkbox("Return To Camp", gui.returnToCamp or false)
+        local currentReturnToCamp = ImGui.Checkbox("Return To Camp", gui.returntocamp or false)
         if currentReturnToCamp ~= previousReturnToCamp then
-            gui.returnToCamp = currentReturnToCamp
-                if gui.returnToCamp then
-                    gui.chaseOn = false
+            gui.returntocamp = currentReturnToCamp
+                if gui.returntocamp then
+                    gui.chaseon = false
                 else
                     local nav = require('nav')
                     nav.campLocation = nil
@@ -233,7 +233,7 @@ local function controlGUI()
             previousReturnToCamp = currentReturnToCamp
         end
 
-        if gui.returnToCamp then
+        if gui.returntocamp then
             ImGui.SameLine()
             ImGui.SetNextItemWidth(100)
             gui.campDistance = ImGui.SliderInt("Camp Distance", gui.campDistance, 5, 200)
@@ -245,19 +245,19 @@ local function controlGUI()
             end
         end
 
-        local currentChaseOn = ImGui.Checkbox("Chase", gui.chaseOn or false)
+        local currentChaseOn = ImGui.Checkbox("Chase", gui.chaseon or false)
         if currentChaseOn ~= previousChaseOn then
-            gui.chaseOn = currentChaseOn
-                if gui.chaseOn then
+            gui.chaseon = currentChaseOn
+                if gui.chaseon then
                     local nav = require('nav')
-                    gui.returnToCamp = false
+                    gui.returntocamp = false
                     nav.campLocation = nil
                     gui.pullOn = false
                 end
             previousChaseOn = currentChaseOn
         end
 
-        if gui.chaseOn then
+        if gui.chaseon then
             ImGui.SameLine()
             ImGui.SetNextItemWidth(100)
             gui.chaseTarget = ImGui.InputText("Name", gui.chaseTarget)
@@ -286,7 +286,7 @@ local function controlGUI()
 
         if gui.pullOn then
             gui.chase = false
-            gui.returnToCamp = true
+            gui.returntocamp = true
 
             ImGui.Spacing()
 

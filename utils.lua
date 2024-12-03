@@ -79,8 +79,8 @@ end
 local lastNavTime = 0
 
 function utils.monitorNav()
-
-    if gui.botOn and (gui.chaseOn or gui.returnToCamp) and not gui.pullOn then
+    if gui.botOn and (gui.chaseon or gui.returntocamp) and not gui.pullOn then
+        debugPrint("monitorNav")
         if not gui then
             printf("Error: gui is nil")
             return
@@ -88,13 +88,18 @@ function utils.monitorNav()
 
         local currentTime = os.time()
 
-        if gui.returnToCamp and (currentTime - lastNavTime >= 5) then
+        if gui.returntocamp and (currentTime - lastNavTime >= 5) then
+            debugPrint("Checking camp distance.")
             nav.checkCampDistance()
             lastNavTime = currentTime
-        elseif gui.chaseOn and (currentTime - lastNavTime >= 2) then
+        elseif gui.chaseon and (currentTime - lastNavTime >= 2) then
+            debugPrint("Checking chase distance.")
             nav.chase()
             lastNavTime = currentTime
         end
+    else
+        debugPrint("Bot is not active or pull is enabled. Exiting routine.")
+        return
     end
 end
 
@@ -185,11 +190,11 @@ function utils.isInCamp(range)
 
     -- Determine reference location (camp location or main assist's location)
     local referenceLocation
-    if gui.returnToCamp then
-        -- Use camp location if returnToCamp is enabled
+    if gui.returntocamp then
+        -- Use camp location if returntocamp is enabled
         nav.campLocation = nav.campLocation or {x = 0, y = 0, z = 0}  -- Default camp location if not set
         referenceLocation = {x = nav.campLocation.x, y = nav.campLocation.y, z = nav.campLocation.z}
-    elseif gui.chaseOn then
+    elseif gui.chaseon then
         -- Use main assist's location if chaseOn is enabled
         local mainAssistSpawn = mq.TLO.Spawn(gui.mainAssist)
         if mainAssistSpawn() then
@@ -228,12 +233,12 @@ end
 function utils.referenceLocation(range)
     range = range or 50  -- Set a default range if none is provided
 
-    -- Determine reference location based on returnToCamp or chaseOn settings
+    -- Determine reference location based on returntocamp or chaseOn settings
     local referenceLocation
-    if gui.returnToCamp then
+    if gui.returntocamp then
         nav.campLocation = nav.campLocation or {x = 0, y = 0, z = 0}  -- Initialize campLocation with a default if needed
         referenceLocation = {x = nav.campLocation.x, y = nav.campLocation.y, z = nav.campLocation.z}
-    elseif gui.chaseOn then
+    elseif gui.chaseon then
         local mainAssistSpawn = mq.TLO.Spawn(gui.mainAssist)
         if mainAssistSpawn() then
             referenceLocation = {x = mainAssistSpawn.X(), y = mainAssistSpawn.Y(), z = mainAssistSpawn.Z()}
@@ -247,7 +252,7 @@ function utils.referenceLocation(range)
         if not hasLoggedError then
             hasLoggedError = true
         end
-        return {}  -- Return an empty table if neither returnToCamp nor chaseOn is enabled
+        return {}  -- Return an empty table if neither returntocamp nor chaseOn is enabled
     end
 
     -- Reset error flag if a valid location is found

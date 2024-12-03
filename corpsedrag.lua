@@ -45,7 +45,7 @@ function corpsedrag.corpsedragRoutine()
         return
     end
 
-    if not gui.corpsedrag and (not gui.returnToCamp or not nav.campLocation) then
+    if not gui.corpsedrag and (not gui.returntocamp or not nav.campLocation) then
         debugPrint("Corpsedrag is off, and no return to camp configured. Exiting routine.")
         return
     end
@@ -127,7 +127,7 @@ function corpsedrag.corpsedragRoutine()
                         mq.cmd('/corpsedrag')
                         mq.delay(500)
 
-                        if gui.returnToCamp then
+                        if gui.returntocamp then
                             returnToCampIfNeeded()
                         end
 

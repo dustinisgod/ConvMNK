@@ -51,7 +51,7 @@ local function setPullOnOff(value)
     if value == "on" then
         gui.pullOn = true
         gui.chase = false
-        gui.returnToCamp = true
+        gui.returntocamp = true
         print("Pulling is now enabled.")
     elseif value == "off" then
         gui.pullOn = false
@@ -133,12 +133,12 @@ local function setChaseOnOff(value)
     if value == "" then
         print("Usage: /convMNK Chase <targetName> <distance> or /convMNK Chase off/on")
     elseif value == 'on' then
-        gui.chaseOn = true
-        gui.returnToCamp = false
+        gui.chaseon = true
+        gui.returntocamp = false
         gui.pullOn = false
         print("Chase enabled.")
     elseif value == 'off' then
-        gui.chaseOn = false
+        gui.chaseon = false
         print("Chase disabled.")
     else
         -- Split value into targetName and distance
@@ -166,19 +166,19 @@ end
 -- Combined function for setting camp, return to camp, and chase
 local function setCampHere(value1)
     if value1 == "on" then
-        gui.chaseOn = false
+        gui.chaseon = false
         gui.campLocation = nav.setCamp()
-        gui.returnToCamp = true
+        gui.returntocamp = true
         gui.campDistance = gui.campDistance or 10
         print("Camp location set to current spot. Return to Camp enabled with default distance:", gui.campDistance)
     elseif value1 == "off" then
         -- Disable return to camp
-        gui.returnToCamp = false
+        gui.returntocamp = false
         print("Return To Camp disabled.")
     elseif tonumber(value1) then
-        gui.chaseOn = false
+        gui.chaseon = false
         gui.campLocation = nav.setCamp()
-        gui.returnToCamp = true
+        gui.returntocamp = true
         gui.campDistance = tonumber(value1)
         print("Camp location set with distance:", gui.campDistance)
     else

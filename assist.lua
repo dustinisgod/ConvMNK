@@ -60,14 +60,18 @@ function assist.assistRoutine()
             mq.delay(10)
         end
 
-        if mq.TLO.Target() and not mq.TLO.Target.Mezzed() and mq.TLO.Target.PctHPs() <= gui.assistPercent and mq.TLO.Target.Distance() <= gui.assistRange then
+        if mq.TLO.Target() and not mq.TLO.Target.Mezzed() and mq.TLO.Target.PctHPs() <= gui.assistPercent and mq.TLO.Target.Distance() <= gui.assistRange and not mq.TLO.Me.Combat() then
             mq.cmd("/squelch /attack on")
-        elseif mq.TLO.Target() and (mq.TLO.Target.Mezzed() or mq.TLO.Target.PctHPs() > gui.assistPercent or mq.TLO.Target.Distance() > (gui.assistRange + 30)) then
+        elseif mq.TLO.Target() and (mq.TLO.Target.Mezzed() or mq.TLO.Target.PctHPs() > gui.assistPercent or mq.TLO.Target.Distance() > (gui.assistRange + 30)) and mq.TLO.Me.Combat() then
             mq.cmd("/squelch /attack off")
         end
     end
 
-    if mq.TLO.Me.CombatState() == "COMBAT" and mq.TLO.Target() and mq.TLO.Target.Dead() ~= ("true" or "nil") then
+    if mq.TLO.Target() and mq.TLO.Target.PctHPs() <= gui.assistPercent and mq.TLO.Target.Distance() <= gui.assistRange and mq.TLO.Stick() == "ON" and not mq.TLO.Target.Mezzed() and not mq.TLO.Me.Combat() then
+        mq.cmd("/squelch /attack on")
+    end
+
+    while mq.TLO.Me.CombatState() == "COMBAT" and mq.TLO.Target() and not mq.TLO.Target.Dead() do
 
         if mq.TLO.Target() and not mq.TLO.Target.Mezzed() and mq.TLO.Target.PctHPs() <= gui.assistPercent and mq.TLO.Target.Distance() <= gui.assistRange then
             mq.cmd("/squelch /attack on")
@@ -148,7 +152,16 @@ function assist.assistRoutine()
                 end
             end
         end
-    
+
+        if mq.TLO.Me.Combat() and not mq.TLO.Stick() then
+            mq.cmd("/squelch /attack off")
+        end
+
+        if mq.TLO.Target() and mq.TLO.Target.Dead() or not mq.TLO.Target() then
+            mq.cmd("/squelch /attack off")
+            return
+        end
+
     mq.delay(50)
     end
 end
