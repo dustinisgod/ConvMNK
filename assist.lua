@@ -3,6 +3,14 @@ local gui = require('gui')
 local utils = require('utils')
 local pull = require('pull')
 
+local DEBUG_MODE = false
+-- Debug print helper function
+local function debugPrint(...)
+    if DEBUG_MODE then
+        print(...)
+    end
+end
+
 local assist = {}
 
 local charLevel = mq.TLO.Me.Level()
@@ -35,7 +43,8 @@ function assist.assistRoutine()
     end
 
     -- Re-check the target after assisting to confirm it's an NPC within range
-    if not mq.TLO.Target() or mq.TLO.Target.Type() ~= "NPC" then
+    if not mq.TLO.Target() or (mq.TLO.Target() and mq.TLO.Target.Type() ~= "NPC") then
+        debugPrint("No target or target is not an NPC.")
         return
     end
 
@@ -72,6 +81,12 @@ function assist.assistRoutine()
     end
 
     while mq.TLO.Me.CombatState() == "COMBAT" and mq.TLO.Target() and not mq.TLO.Target.Dead() do
+
+        -- Re-check the target after assisting to confirm it's an NPC within range
+        if not mq.TLO.Target() or (mq.TLO.Target() and mq.TLO.Target.Type() ~= "NPC") then
+            debugPrint("No target or target is not an NPC.")
+            return
+        end
 
         if mq.TLO.Target() and not mq.TLO.Target.Mezzed() and mq.TLO.Target.PctHPs() <= gui.assistPercent and mq.TLO.Target.Distance() <= gui.assistRange then
             mq.cmd("/squelch /attack on")
@@ -129,7 +144,7 @@ function assist.assistRoutine()
 
         local lastStickDistance = nil
 
-        if mq.TLO.Target() and mq.TLO.Stick() == "ON" then
+        if mq.TLO.Target() and mq.TLO.Stick.Active() then
             local stickDistance = gui.stickDistance -- current GUI stick distance
             local lowerBound = stickDistance * 0.9
             local upperBound = stickDistance * 1.1
