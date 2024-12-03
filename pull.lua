@@ -3,7 +3,7 @@ local gui = require('gui')
 local utils = require('utils')
 local nav = require('nav')
 
-local DEBUG_MODE = true
+local DEBUG_MODE = false
 -- Debug print helper function
 local function debugPrint(...)
     if DEBUG_MODE then
