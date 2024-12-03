@@ -3,7 +3,7 @@ local gui = require('gui')
 local utils = require('utils')
 local nav = require('nav')
 
-local DEBUG_MODE = false
+local DEBUG_MODE = true
 -- Debug print helper function
 local function debugPrint(...)
     if DEBUG_MODE then
@@ -11,12 +11,15 @@ local function debugPrint(...)
     end
 end
 
+local pull = {}
+
 local pullQueue = {}
 local campQueue = {}
 local aggroQueue = {}  -- New queue to track mobs on their way to camp
 local campQueueCount = 0  -- Variable to track the number of mobs in campQueue
 
 local pullability = "376"
+local cannotSeeFlag = false
 
 local messagePrintedFlags = {
     CLR = false,
@@ -56,6 +59,14 @@ local function calculateHeadingTo(targetY, targetX)
     if heading < 0 then heading = heading + 360 end
     return heading
 end
+
+local function cannotSeeTarget(line)
+    debugPrint("Event Triggered: You cannot see your target.")
+    mq.cmd('/echo Event Triggered: You cannot see your target.')
+    cannotSeeFlag = true
+end
+
+mq.event('CannotSeeTarget', 'You cannot see your target.', cannotSeeTarget)
 
 -- Define a predicate function that checks if the spawn is an NPC
 local function isNPC(spawn)
@@ -122,17 +133,31 @@ local function updatePullQueue()
         end
 
         -- Validate against campQueue
-        local alreadyInQueue = false
+        local alreadyInCampQueue = false
         for _, campMob in ipairs(campQueue) do
             if campMob.ID() == spawn.ID() then
-                alreadyInQueue = true
+                alreadyInCampQueue = true
                 break
             end
         end
-        if alreadyInQueue then
+        if alreadyInCampQueue then
             debugPrint("Skipping spawn already in campQueue:", spawn.Name())
             goto continue
         end
+
+        -- Validate against aggroQueue
+        local alreadyInAggroQueue = false
+        for _, aggroMob in ipairs(aggroQueue) do
+            if aggroMob.ID() == spawn.ID() then
+                alreadyInAggroQueue = true
+                break
+            end
+        end
+        if alreadyInAggroQueue then
+            debugPrint("Skipping spawn already in aggroQueue:", spawn.Name())
+            goto continue
+        end
+
         local mobID = spawn.ID()
         local mobName = mq.TLO.Spawn(mobID).CleanName()
         -- Check if spawn's name is in the pull ignore list
@@ -143,7 +168,6 @@ local function updatePullQueue()
 
         -- Validate heading range
         if not isHeadingValid(headingToSpawn) then
-            debugPrint("Skipping spawn outside heading range:", spawn.Name())
             goto continue
         end
 
@@ -178,51 +202,40 @@ local function updatePullQueue()
     debugPrint("Updated pullQueue:", #pullQueue)
 end
 
-local function isGroupOrRaidMember(memberName)
-    local aggroHolderName = mq.TLO.Target.AggroHolder.Name()  -- Get the name of the aggro holder
-
-    -- Check raid members if not already found in group
-    if mq.TLO.Raid.Members() > 0 then
-        local raidSize = mq.TLO.Raid.Members() or 0
-        for i = 1, raidSize do
-            if mq.TLO.Raid.Member(i).Name() == aggroHolderName then
-            return true
-            else
-                return false
-            end
-        end
-    elseif mq.TLO.Me.Grouped() then  -- Verify the player is in a group
-        local groupSize = mq.TLO.Group.Members() or 0
-        for i = 1, groupSize do
-            if mq.TLO.Group.Member(i).Name() == aggroHolderName then
-                return true
-            else
-                return false
-            end
-        end
-    end
-end
-
 local function returnToCampIfNeeded()
     -- Check if camp location is set
     if nav.campLocation then
         -- Retrieve player and camp coordinates
-        local playerX, playerY = mq.TLO.Me.X(), mq.TLO.Me.Y()
+        local playerX, playerY, playerZ = mq.TLO.Me.X(), mq.TLO.Me.Y(), mq.TLO.Me.Z()
         local campX = tonumber(nav.campLocation.x) or 0
         local campY = tonumber(nav.campLocation.y) or 0
         local campZ = tonumber(nav.campLocation.z) or 0
 
         -- Calculate distance to camp
-        local distanceToCamp = math.sqrt((playerX - campX)^2 + (playerY - campY)^2)
+        local distanceToCamp = math.sqrt((playerX - campX)^2 + (playerY - campY)^2 + (playerZ - campZ)^2)
 
         -- Navigate back to camp if beyond threshold
-        if distanceToCamp > 50 then
+        if distanceToCamp > gui.campDistance then
             mq.cmdf("/squelch /nav loc %f %f %f", campY, campX, campZ)
             while mq.TLO.Navigation.Active() do
-                mq.delay(50)
+                mq.delay(10)
             end
             mq.cmd("/face fast")  -- Face camp direction after reaching camp
+            mq.delay(100)
+            if mq.TLO.Target() and mq.TLO.Target.PctAggro() > 0 then
+                while mq.TLO.Target() and mq.TLO.Target.Distance() > gui.campSize and mq.TLO.Target.PctAggro() == 100 do
+                    mq.delay(10)
+                end
+                return
+            end
+
+        else
+            debugPrint("Player is within camp distance.")
+            return
         end
+    else
+        print("Camp location is not set. Cannot return to camp.")
+        return
     end
 end
 
@@ -262,7 +275,7 @@ local function updateAggroQueue()
                 if not inCamp and mob.Distance() and tonumber(mob.Distance()) <= 5 then
                     -- Mob is close but outside camp range (no specific action needed here)
                 elseif inCamp then
-                    table.insert(gui.campQueue, mob)  -- Add mob to camp queue
+                    table.insert(campQueue, mob)  -- Add mob to camp queue
                     table.remove(aggroQueue, i)  -- Remove from aggroQueue
                 end
             end
@@ -270,89 +283,113 @@ local function updateAggroQueue()
     end
 end
 
-
 local function pullTarget()
     debugPrint("Pulling target...")
     if #pullQueue == 0 then
+        debugPrint("No targets in pullQueue. Exiting pull routine.")
         return
     end
 
     local target = pullQueue[1]
+    if not target or not target.ID then
+        debugPrint("Invalid target. Exiting pull routine.")
+        return
+    end
+
+    local targetID = target.ID()
+    debugPrint("Target:", target.Name())
+
+    -- Clear attack and target the mob
     mq.cmd("/squelch /attack off")
     mq.delay(100)
+    mq.cmdf("/squelch /target id %d", targetID)
+    mq.delay(200, function() return mq.TLO.Target() and mq.TLO.Target.ID() == targetID end)
 
-    mq.cmdf("/squelch /target id %d", target.ID())
-    mq.delay(200, function() return mq.TLO.Target.ID() == target.ID() end)
-
-    if mq.TLO.Target() and mq.TLO.Target.ID() ~= target.ID() then
+    -- Validate target selection
+    if not mq.TLO.Target() or mq.TLO.Target.ID() ~= targetID then
+        debugPrint("Target is not selected. Exiting pull routine.")
         return
     end
 
-    if mq.TLO.Target() and mq.TLO.Target.Mezzed() and mq.TLO.Target.Distance() <= (gui.campSize + 20) then
-        table.insert(gui.campQueue, target)
+    -- Check if the target is mezzed and within camp size + buffer
+    if mq.TLO.Target.Mezzed() and mq.TLO.Target.Distance() <= (gui.campSize + 20) then
+        debugPrint("Target is mezzed. Adding target to campQueue:", target.Name())
+        table.insert(campQueue, target)
         table.remove(pullQueue, 1)
         return
     end
 
-    if mq.TLO.Target() and mq.TLO.Target.PctAggro() > 0 or isGroupOrRaidMember() then
-        local targetID = target.ID()
-        if type(targetID) == "number" then
-            table.insert(aggroQueue, targetID)
+    -- Pull logic: Check line of sight, range, and use ability
+    local function tryPullAbility()
+        if mq.TLO.Me.AltAbilityReady(pullability) then
+            debugPrint("Pulling target:", target.Name(), "with ability:", pullability)
+            mq.cmdf("/squelch /alt act %s", pullability)
+            mq.delay(300)
+            mq.doevents()
         end
+    end
+
+    local function handleAggro()
+        debugPrint("Adding target to aggroQueue: ", targetID)
+        table.insert(aggroQueue, targetID)
+        debugPrint("Removing target from pullQueue: ", target.Name())
         table.remove(pullQueue, 1)
         returnToCampIfNeeded()
-        return
     end
 
-    mq.cmdf("/squelch /nav id %d", target.ID())
-    debugPrint("Navigating to target:", target.Name())
-    mq.delay(50, function() return mq.TLO.Navigation.Active() end)
-
-    while mq.TLO.Target() and mq.TLO.Target.PctAggro() <= 0 do
-        if gui.botOn and gui.pullOn then
-            if not mq.TLO.Target() then
-                print("Error: No target selected. Exiting pull routine.")
-                return
-            end
-
-            if mq.TLO.Target() and mq.TLO.Target.LineOfSight() and mq.TLO.Target.PctAggro() <= 0 and mq.TLO.Target.Distance() < 160 then
-                debugPrint("Target is in line of sight and within range.", mq.TLO.Target.LineOfSight())
-
-                if not pullability then
-                    print("Error: pullability is nil. Check if the ability ID is correctly set.")
-                    return
-                end
-                debugPrint("Pulling target:", target.Name())
-                if mq.TLO.Me.AltAbilityReady(pullability) then
-                    mq.cmdf("/squelch /alt act %s", pullability)
-                end
-            end
-
-            if mq.TLO.Target() and not mq.TLO.Navigation.Active() and not mq.TLO.Target.LineOfSight() then
-                debugPrint("Navigating to target:", target.Name())
-                mq.cmdf("/squelch /nav id %d", target.ID())
-            end
-        else
-            debugPrint("Bot is off. Exiting pull routine.")
+    if mq.TLO.Target.Distance() <= 150 and mq.TLO.Target.LineOfSight() then
+        debugPrint("First Check. Target is in line of sight and within range.")
+        tryPullAbility()
+        debugPrint(mq.TLO.Me.PctAggro())
+        if mq.TLO.Target.PctAggro() > 0 then
+            debugPrint("Target has aggro. Adding to aggroQueue 1.")
+            handleAggro()
+            debugPrint("Exiting pull routine.1")
             return
         end
-        mq.delay(200)
     end
 
-    if mq.TLO.Target() and mq.TLO.Target.PctAggro() > 0 then
-        debugPrint("Target has aggro. Stopping pull routine.")
-        mq.cmd("/squelch /nav stop")
-        mq.delay(100)
-        local targetID = mq.TLO.Target.ID()
-        if type(targetID) == "number" then
-            debugPrint("Adding target to aggroQueue:", targetID)
-            table.insert(aggroQueue, targetID)
+    -- Navigation logic if the target is not in line of sight
+    if not mq.TLO.Navigation.Active() then
+        debugPrint("Navigating to target:", mq.TLO.Target.Name())
+        mq.cmdf("/squelch /nav id %d", targetID)
+        mq.delay(10, function() return mq.TLO.Navigation.Active() end)
+    end
+
+    -- While navigating, continue checks for target in range and line of sight
+    while mq.TLO.Navigation.Active() do
+        if not gui.botOn or not gui.pullOn then
+            debugPrint("Bot is off. Stopping navigation and exiting pull routine.")
+            mq.cmd("/squelch /nav stop")
+            return
         end
-        debugPrint("Removing target from pullQueue:", target.Name())
-        returnToCampIfNeeded()
-        return
+
+        if mq.TLO.Target.Distance() <= 150 and mq.TLO.Target.LineOfSight() then
+            debugPrint("Target is in line of sight and within range during navigation.")
+            tryPullAbility()
+            debugPrint(mq.TLO.Me.PctAggro())
+            if mq.TLO.Target.PctAggro() > 0 then
+                debugPrint("Target has aggro. Adding to aggroQueue 2.")
+                handleAggro()
+                debugPrint("Exiting pull routine.2")
+                return
+            end
+        end
+        mq.delay(10)
     end
 
+    -- Final aggro check after navigation completes
+    if mq.TLO.Target.Distance() <= 150 and mq.TLO.Target.LineOfSight() then
+        debugPrint("Final check: Target is in line of sight and within range.")
+        tryPullAbility()
+        debugPrint(mq.TLO.Me.PctAggro())
+        if mq.TLO.Target.PctAggro() > 0 then
+            debugPrint("Target has aggro. Adding to aggroQueue 3.")
+            handleAggro()
+            debugPrint("Exiting pull routine.3")
+            return
+        end
+    end
 end
 
 local function isGroupMemberAliveAndSufficientMana(classShortName, manaThreshold)
@@ -416,7 +453,7 @@ local function checkHealthAndBuffAndAssist()
     local rooted = mq.TLO.Me.Rooted()
     local deadMA = mq.TLO.Spawn(gui.mainAssist).Dead()
     local maID = tostring(mq.TLO.Spawn(gui.mainAssist).ID())
-    
+
     if healthPct < 70  then
         if not shownMessage then
             print("Cannot pull: Health is below 70%.")
@@ -455,7 +492,7 @@ end
 
 local function pullRoutine()
     debugPrint("Running pull routine...")
-   
+
     if not gui.botOn and gui.pullOn then
         debugPrint("Bot is off. Exiting pull routine.")
         return
@@ -473,33 +510,54 @@ local function pullRoutine()
 
             aggroQueue = {}
             updateAggroQueue()
-            debugPrint("AggroQueue count:", #aggroQueue)
 
             pullPauseTimer = os.time()  -- Reset the timer
         end
     end
 
-    -- Check if nav.campLocation exists and has a valid zone
     if not nav.campLocation or not nav.campLocation.zone or nav.campLocation.zone == "nil" then
+        debugPrint("nav.campLocation: ", nav.campLocation and nav.campLocation.zone)
         print("Camp location is not set. Aborting pull routine.")
         return
     end
 
-    -- Check if the current zone does not match camp zone
     local zone = mq.TLO.Zone.ShortName()
     if zone ~= nav.campLocation.zone then
         print("Current zone does not match camp zone. Aborting pull routine.")
         return
     end
 
-    gui.campQueue = utils.referenceLocation(gui.campSize) or {}
-    campQueueCount = #gui.campQueue  -- Update campQueueCount to track mob count
+    campQueue = utils.referenceLocation(gui.campSize) or {}
+    campQueueCount = #campQueue
     debugPrint("CampQueue count:", campQueueCount)
 
     aggroQueue = aggroQueue or {}
     updateAggroQueue()
-    debugPrint("AggroQueue count:", #aggroQueue)
 
+    -- Add new logic to process mobs in the aggro queue
+    while #aggroQueue > 0 do
+        debugPrint("Processing aggroQueue. Waiting for mobs to enter camp radius.")
+        for i = #aggroQueue, 1, -1 do
+            local mobID = aggroQueue[i]
+            local mob = mq.TLO.Spawn("id " .. mobID)
+            if mob and mob.Distance() <= gui.campSize then
+                debugPrint("Mob", mob.Name(), "has entered camp radius. Moving to campQueue.")
+                table.insert(campQueue, {Name = mob.Name(), ID = mob.ID()})
+                for i, id in ipairs(aggroQueue) do
+                    if id == mobID then
+                        table.remove(aggroQueue, i)
+                        break
+                    end
+                end
+            end
+        end
+
+        -- Wait briefly before re-checking aggro queue
+        mq.delay(100)
+        updateAggroQueue() -- Ensure the aggro queue is updated
+    end
+
+    -- Continue the pull routine
     local targetCampAmount = gui.keepMobsInCampAmount or 1
 
     local pullCondition
@@ -512,16 +570,12 @@ local function pullRoutine()
     end
 
     while pullCondition() do
-        debugPrint("Pulling target...")
-        -- Check if pullOn was unchecked during the routine
         if not gui.pullOn then
             debugPrint("Pull routine stopped.")
             return
-        elseif mq.TLO.Navigation.Active() then
-            debugPrint("Navigation is active. Stopping pull routine.")
-            mq.cmd("/squelch /nav stop")  -- Stop any active navigation
-            return
         end
+
+        updatePullQueue()
 
         local groupStatusOk = checkGroupMemberStatus()
         if not groupStatusOk then
@@ -529,16 +583,14 @@ local function pullRoutine()
             break
         end
 
-        updatePullQueue()
-        debugPrint("PullQueue count:", #pullQueue)  
+        debugPrint("PullQueue count:", #pullQueue)
         if #pullQueue > 0 then
             pullTarget()
 
-            gui.campQueue = utils.referenceLocation(gui.campSize) or {}
-            campQueueCount = #gui.campQueue  -- Refresh campQueueCount after updating campQueue
+            campQueue = utils.referenceLocation(gui.campSize) or {}
+            campQueueCount = #campQueue
 
             updateAggroQueue()
-            debugPrint("AggroQueue count:", #aggroQueue)
         else
             debugPrint("No targets found in pullQueue.")
             break
@@ -547,6 +599,7 @@ local function pullRoutine()
 end
 
 return {
+    pull = pull,
     updatePullQueue = updatePullQueue,
     pullRoutine = pullRoutine,
     pullQueue = pullQueue,

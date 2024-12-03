@@ -82,6 +82,14 @@ function assist.assistRoutine()
 
     while mq.TLO.Me.CombatState() == "COMBAT" and mq.TLO.Target() and not mq.TLO.Target.Dead() do
 
+        if not gui.botOn and not gui.assistOn then
+            return
+        end
+
+        if gui.switchWithMA then
+            mq.cmd("/squelch /assist %s", gui.mainAssist)
+        end
+
         -- Re-check the target after assisting to confirm it's an NPC within range
         if not mq.TLO.Target() or (mq.TLO.Target() and mq.TLO.Target.Type() ~= "NPC") then
             debugPrint("No target or target is not an NPC.")
