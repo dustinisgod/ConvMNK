@@ -29,7 +29,6 @@ local function returnToCampIfNeeded()
         if distanceToCamp > 50 then
             mq.cmdf("/squelch /nav loc %f %f %f", campY, campX, campZ)
             while mq.TLO.Navigation.Active() do
-                utils.useSeloWithPercussion()
                 mq.delay(50)
             end
             mq.cmd("/face fast")  -- Face camp direction after reaching camp
