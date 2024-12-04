@@ -15,28 +15,26 @@ local corpsedrag = {}
 
 local function returnToCampIfNeeded()
     local utils = require('utils')
-
     if nav.campLocation then
         -- Retrieve player and camp coordinates
-        local playerX, playerY = mq.TLO.Me.X(), mq.TLO.Me.Y()
+        local playerX, playerY, playerZ = mq.TLO.Me.X(), mq.TLO.Me.Y(), mq.TLO.Me.Z()
         local campX = tonumber(nav.campLocation.x) or 0
         local campY = tonumber(nav.campLocation.y) or 0
         local campZ = tonumber(nav.campLocation.z) or 0
 
         -- Calculate distance to camp
-        local distanceToCamp = math.sqrt((playerX - campX)^2 + (playerY - campY)^2)
+        local distanceToCamp = math.sqrt((playerX - campX)^2 + (playerY - campY)^2 + (playerZ - campZ)^2)
 
+        -- Navigate back to camp if beyond threshold
         if distanceToCamp > 50 then
-            debugPrint("Navigating back to camp location.")
             mq.cmdf("/squelch /nav loc %f %f %f", campY, campX, campZ)
             while mq.TLO.Navigation.Active() do
                 utils.useSeloWithPercussion()
                 mq.delay(50)
             end
-            return true
+            mq.cmd("/face fast")  -- Face camp direction after reaching camp
         end
     end
-    return false
 end
 
 function corpsedrag.corpsedragRoutine()
@@ -112,12 +110,12 @@ function corpsedrag.corpsedragRoutine()
 
             if mq.TLO.Target() and corpseID and mq.TLO.Target.ID() == corpseID and mq.TLO.Target.Distance() < 75 then
                 return
-            elseif mq.TLO.Target.Distance() > 75 then
-                if mq.TLO.Target.ID() == corpseID then
+            elseif mq.TLO.Target() and mq.TLO.Target.Distance() > 75 then
+                if mq.TLO.Target() and mq.TLO.Target.ID() == corpseID then
                     if mq.TLO.Navigation.PathExists("id " .. corpseIDString)() then
                         debugPrint("Path found to corpse of: ", memberName)
                         mq.cmdf('/nav id %d', corpseID)
-                        while mq.TLO.Navigation.Active() and mq.TLO.Target.Distance() > 95 do
+                        while mq.TLO.Target() and mq.TLO.Navigation.Active() and mq.TLO.Target.Distance() > 95 do
                             mq.delay(100)
                         end
 
