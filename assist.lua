@@ -48,14 +48,14 @@ function assist.assistRoutine()
         return
     end
 
-    if mq.TLO.Target() and mq.TLO.Target.PctHPs() <= gui.assistPercent and mq.TLO.Target.Distance() <= gui.assistRange and mq.TLO.Stick() == "OFF" and not mq.TLO.Target.Mezzed() then
+    if mq.TLO.Target() and mq.TLO.Target.PctHPs() <= gui.assistPercent and mq.TLO.Target.Distance() <= gui.assistRange and not mq.TLO.Stick.Active() and not mq.TLO.Target.Mezzed() then
         if gui.stickFront then
             if mq.TLO.Navigation.Active() then
                 mq.cmd('/nav stop')
                 mq.delay(100)
             end
             mq.cmd("/stick moveback 0")
-            mq.delay(100)
+            mq.delay(400)
             mq.cmdf("/stick front %d uw", gui.stickDistance)
             mq.delay(100)
         elseif gui.stickBehind then
@@ -64,8 +64,17 @@ function assist.assistRoutine()
                 mq.delay(100)
             end
             mq.cmd("/stick moveback 0")
-            mq.delay(100)
+            mq.delay(400)
             mq.cmdf("/stick behind %d uw", gui.stickDistance)
+            mq.delay(100)
+        elseif gui.stickSide then
+            if mq.TLO.Navigation.Active() then
+                mq.cmd('/nav stop')
+                mq.delay(100)
+            end
+            mq.cmd("/stick moveback 0")
+            mq.delay(400)
+            mq.cmdf("/stick pin %d uw", gui.stickDistance)
             mq.delay(100)
         end
 

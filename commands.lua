@@ -194,17 +194,26 @@ local function setMeleeOptions(meleeOption, stickOption, stickDistance)
     elseif meleeOption == "off" then
         gui.assistMelee = false
         print("Assist Melee is now disabled")
-    elseif meleeOption == "front" or meleeOption == "behind" then
+    elseif meleeOption == "front" or meleeOption == "behind" or meleeOption == "side" then
         -- Set Stick position based on 'front' or 'behind' and optionally set distance
         gui.assistMelee = true
         if meleeOption == "front" then
             gui.stickFront = true
             gui.stickBehind = false
+            gui.stickLeft = false
+            gui.stickRight = false
             print("Stick set to front")
         elseif meleeOption == "behind" then
             gui.stickBehind = true
             gui.stickFront = false
+            gui.stickLeft = false
+            gui.stickRight = false
             print("Stick set to behind")
+        elseif meleeOption == "side" then
+            gui.stickSide = true
+            gui.stickFront = false
+            gui.stickBehind = false
+            print("Stick set to side")
         end
 
         -- Check if stickDistance is provided and is a valid number
@@ -215,7 +224,7 @@ local function setMeleeOptions(meleeOption, stickOption, stickDistance)
             print("Invalid stick distance. Usage: /convMNK melee front/behind <distance>")
         end
     else
-        print("Error: Invalid command. Usage: /convMNK melee on/off or /convMNK melee front/behind <distance>")
+        print("Error: Invalid command. Usage: /convMNK melee on/off or /convMNK melee front/behind/left/right <distance>")
     end
 end
 

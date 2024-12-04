@@ -20,6 +20,7 @@ local function setDefaultConfig()
     gui.assistMelee = true
     gui.stickFront = false
     gui.stickBehind = true
+    gui.stickSide = false
     gui.stickDistance = 15
     gui.switchWithMA = true
     gui.returntocamp = false
@@ -195,11 +196,19 @@ local function controlGUI()
                 gui.stickFront = ImGui.Checkbox("Front", gui.stickFront or false)
                 if gui.stickFront then
                     gui.stickBehind = false
+                    gui.stickSide = false
                 end
-
+                ImGui.Spacing()
                 gui.stickBehind = ImGui.Checkbox("Behind", gui.stickBehind or false)
                 if gui.stickBehind then
                     gui.stickFront = false
+                    gui.stickSide = false
+                end
+                ImGui.Spacing()
+                gui.stickSide = ImGui.Checkbox("Side", gui.stickSide or false)
+                if gui.stickSide then
+                    gui.stickFront = false
+                    gui.stickBehind = false
                 end
 
                 ImGui.Spacing()
