@@ -221,10 +221,10 @@ local function setMeleeOptions(meleeOption, stickOption, stickDistance)
             gui.stickDistance = tonumber(stickOption)
             print("Stick distance set to", gui.stickDistance)
         elseif stickOption then
-            print("Invalid stick distance. Usage: /convMNK melee front/behind <distance>")
+            print("Invalid stick distance. Usage: /convMNK melee front/behind/side <distance>")
         end
     else
-        print("Error: Invalid command. Usage: /convMNK melee on/off or /convMNK melee front/behind/left/right <distance>")
+        print("Error: Invalid command. Usage: /convMNK melee on/off or /convMNK melee front/behind/side <distance>")
     end
 end
 
